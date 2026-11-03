@@ -18,6 +18,59 @@ A voice AI agent that:
 
 Rule for this project: **everything is free and runs on your own laptop.**
 
+### The bigger goal: a SaaS platform
+
+The voice bot is the first module of a **multi-channel AI engagement SaaS**:
+businesses sign up, configure their AI agent, and the platform talks to their
+leads by **voice and WhatsApp**, then runs **workflows** automatically.
+
+```
+                         ┌──────────────── SaaS PLATFORM ────────────────┐
+                         │                                               │
+  Channels               │   Core                     Automation         │   Business UI
+ ┌────────────┐          │  ┌──────────────┐         ┌───────────────┐   │  ┌─────────────────┐
+ │ Voice bot  │──events──┼─►│ Event bus    │────────►│ Workflow      │   │  │ Dashboard       │
+ │ (calls)    │          │  │              │         │ engine        │   │  │ - leads         │
+ ├────────────┤          │  │ Contacts /   │         │ trigger →     │   │  │ - calls         │
+ │ WhatsApp   │──events──┼─►│ leads, calls,│         │ conditions →  │   │  │ - WhatsApp inbox│
+ │ bot        │◄─actions─┼──│ messages,    │◄────────│ actions       │   │  │ - workflow      │
+ └────────────┘          │  │ fields (DB)  │         └───────────────┘   │  │   builder       │
+                         │  └──────────────┘                             │  │ - bot settings  │
+                         │   Organizations (one per business customer)   │  │ - analytics     │
+                         └───────────────────────────────────────────────┘  └─────────────────┘
+```
+
+#### How workflows work
+
+A workflow = **trigger** → **conditions** → **actions**, stored as data (JSON) so
+businesses can create their own from the dashboard.
+
+| Part | Examples |
+|---|---|
+| **Triggers** (events) | `call.completed`, `fields.extracted`, `whatsapp.message.received`, `lead.created`, `no_reply.24h` |
+| **Conditions** | `intent == "interested"`, `budget > 50000`, `callback_time is set`, `language == "hindi"` |
+| **Actions** | send WhatsApp template, send WhatsApp Flow (form), schedule a call, update lead status, notify a salesperson, call an external webhook (CRM, n8n) |
+
+Example: *When `fields.extracted` and `intent == "interested"` → send a WhatsApp
+brochure → if no reply in 24h → schedule a follow-up AI call.*
+
+#### What "SaaS" adds on top of the bot
+
+| SaaS feature | What it means |
+|---|---|
+| **Multi-tenancy** | Many businesses on one platform; each only sees its own data (`organization_id` on every row) |
+| **Auth** | Sign-up, login, team members, roles |
+| **Configuration UI** | Each business sets its own bot persona, call script, fields to extract, workflows |
+| **Background jobs** | Calls, messages and delayed workflow steps run in a queue, not in the web request |
+| **Swappable providers** | Whisper ↔ Sarvam, Ollama ↔ Groq/Claude, browser ↔ Twilio/Exotel, chosen per business |
+| **Deployment** | Hosted online, with monitoring and logs |
+| **Billing** (later) | Plans and usage limits (Stripe test mode, free to build) |
+
+**Honest cost note:** building and demoing all of this is free (local + free tiers).
+Hosting it for *real customers* would cost money, mainly because running AI models
+for many callers needs servers with GPUs, or paid APIs. That's exactly why the
+providers are designed to be swappable.
+
 ---
 
 ## 2. Requirements
@@ -143,30 +196,86 @@ ai-calling-bot/
 
 ## 6. Learning roadmap
 
+Built in **phases**. Each phase ends with something working and demo-able.
+
+#### Phase 1: Core voice bot
+
 | # | Lesson | What you build | What you learn | Status |
 |---|---|---|---|---|
-| 1 | Setup + the brain | uv project, Ollama, `brain.py` text chatbot | Packages, local AI server, HTTP APIs, chat memory | 🔄 In progress |
-| 2 | The ears | Speech-to-text with Whisper | Audio basics, sample rate, transcription | ⏳ |
+| 1 | Setup + the brain | uv project, Ollama, `brain.py` text chatbot | Packages, local AI server, HTTP APIs, chat memory | ✅ Done |
+| 2 | The ears | Speech-to-text with Whisper (local), inside one swappable `transcribe()` function | Audio basics, sample rate, transcription | 🔄 In progress |
 | 3 | The voice | Text-to-speech with Kokoro/Piper | Audio output, voices, streaming audio | ⏳ |
 | 4 | Full voice loop | Pipecat pipeline in the browser | VAD, WebRTC, streaming, interruptions | ⏳ |
 | 5 | The job | Lead-qualification script + persona | Prompt design, conversation flow | ⏳ |
-| 6 | Transcripts | Save every call to SQLite | Databases, schemas | ⏳ |
+| 6 | Transcripts | Save every call to a database | Databases, schemas | ⏳ |
 | 7 | Field extraction | LLM → JSON fields | Structured output, validation | ⏳ |
-| 8 | Workflows | Rules engine + actions | Event-driven design | ⏳ |
-| 9 | Dashboard | FastAPI + web page with metrics | Web APIs, latency measurement | ⏳ |
-| 10 | WhatsApp | Follow-up messages via Cloud API | Webhooks, tunnels, external APIs | ⏳ |
-| 11 | Phone (optional) | Real calls via Twilio trial | Telephony, audio codecs | ⏳ |
-| 12 | Polish | Diagram, demo video, README | Presenting your work | ⏳ |
+
+#### Phase 2: Workflow engine
+
+| # | Lesson | What you build | What you learn | Status |
+|---|---|---|---|---|
+| 8 | Events | Every call/message emits events (`call.completed`, ...) | Event-driven design | ⏳ |
+| 9 | Workflows as data | Trigger → conditions → actions, stored as JSON | Rules engines, schemas | ⏳ |
+| 10 | Actions + delays | Run actions; "wait 24h then..." steps | Background jobs, schedulers | ⏳ |
+| 11 | Workflow runs log | See what ran, when, and why it failed | Observability, debugging | ⏳ |
+
+#### Phase 3: WhatsApp channel
+
+| # | Lesson | What you build | What you learn | Status |
+|---|---|---|---|---|
+| 12 | Send messages | Template messages via WhatsApp Cloud API | API keys, `.env`, external APIs | ⏳ |
+| 13 | Receive messages | Webhook + tunnel; incoming messages become events | Webhooks, signatures, tunnels | ⏳ |
+| 14 | WhatsApp bot | Same brain replies on WhatsApp | Reusing the core across channels | ⏳ |
+| 15 | WhatsApp Flows | Forms inside WhatsApp (booking, lead details) | Structured interactive messages | ⏳ |
+| 16 | Knowledge (RAG) | Bot answers from the business's own documents | Embeddings, vector search | ⏳ |
+
+#### Phase 4: SaaS platform
+
+| # | Lesson | What you build | What you learn | Status |
+|---|---|---|---|---|
+| 17 | Backend API | FastAPI + Postgres | REST APIs, migrations | ⏳ |
+| 18 | Auth + multi-tenancy | Sign-up, login, organizations, team members | Security, data isolation | ⏳ |
+| 19 | Dashboard | Leads, calls, transcripts, WhatsApp inbox, analytics | Frontend (Next.js), API integration | ⏳ |
+| 20 | Workflow builder UI | Businesses create workflows visually | UI for rules, validation | ⏳ |
+| 21 | Bot settings UI | Persona, call script, fields to extract, per business | Configurable systems | ⏳ |
+
+#### Phase 5: Production
+
+| # | Lesson | What you build | What you learn | Status |
+|---|---|---|---|---|
+| 22 | Swappable providers | Sarvam STT, Groq/Claude LLM, chosen per business | Adapter pattern, benchmarking | ⏳ |
+| 23 | Real phone calls | Twilio trial / Exotel | Telephony, audio codecs | ⏳ |
+| 24 | Integrations | Outgoing webhooks, CRM sync, n8n | Integration design | ⏳ |
+| 25 | Deploy | Hosted demo, logs, monitoring | Docker, deployment | ⏳ |
+| 26 | Polish | Architecture diagram, demo video, README | Presenting your work | ⏳ |
 
 ### Lesson 1 steps
 
 | Step | Task | Status |
 |---|---|---|
 | 1 | Install uv | ✅ Done |
-| 2 | Create the Python project (`uv init`), run it, add `.gitignore` | 🔄 Project created; run + `.gitignore` pending |
-| 3 | Start Ollama, download `qwen3:8b` | ⏳ |
-| 4 | Call the AI API by hand with `curl` | ⏳ |
-| 5 | Write `brain.py` (chat with memory) + exercises | ⏳ |
+| 2 | Create the Python project (`uv init`), run it, add `.gitignore` | ✅ Done |
+| 3 | Start Ollama, download `qwen3:8b` | ✅ Done |
+| 4 | Call the AI API by hand with `curl` | ✅ Done |
+| 5 | Write `brain.py` (chat with memory) + first git commit | ✅ Done |
+
+### Lesson 2 steps
+
+| Step | Task | Type | Status |
+|---|---|---|---|
+| 2.1 | What audio is to a computer (samples, sample rate, channels) | Concept | ✅ Done |
+| 2.2 | Install sounddevice, soundfile, numpy, mlx-whisper | Setup | ✅ Done |
+| 2.3 | Record your voice to `test.wav` | Local | ✅ Done |
+| 2.4 | Transcribe with Whisper | Library (local) | ✅ Done |
+| 2.5 | Wrap it in one `transcribe(audio)` function (so engines can be swapped later) | Design | ✅ Done |
+| 2.6 | Connect the ears to the brain (voice in, text out) | Integration | ⏳ |
+
+### Later: Sarvam API lesson (after the core bot works)
+
+Add Sarvam (cloud API) as a second speech-to-text engine in the same project:
+API key in `.env`, sending audio files over HTTP, status codes and errors,
+an `STT_ENGINE=whisper|sarvam` switch, and a Whisper vs Sarvam benchmark
+(accuracy + speed on English, Hindi and Hinglish).
 
 ---
 
